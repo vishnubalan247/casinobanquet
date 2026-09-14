@@ -232,6 +232,7 @@ button{border:0;border-radius:12px;padding:14px 18px;font:600 13px "DM Sans",san
 </div>
 
 <script>
+const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz41xA9NNTQbActYDcWedyH7AfMFOpM55w1PCNarzYtTSjczqRWKrnDTOZIkweHM4N-/exec";
 const form = document.getElementById('leadForm');
 const steps = [...document.querySelectorAll('.step')];
 const progress = document.getElementById('progress');
@@ -297,37 +298,65 @@ function nextStep(n){
   if(validateStep(n)) showStep(n+1);
 }
 
-form.addEventListener('submit', e=>{
+form.addEventListener("submit", async (e) => {
   e.preventDefault();
-  if(!validateStep(3)) return;
 
-  // Basic anti-spam / anti-duplicate client-side safeguards.
-  // Production: enforce the same checks server-side and add mobile OTP verification.
-  if(document.getElementById('website').value) return;
+  if (!validateStep(3)) return;
+  if (document.getElementById("website").value) return;
 
-  const phone=document.getElementById('phone').value.replace(/\D/g,'');
-  const email=document.getElementById('email').value.trim().toLowerCase();
-  const fingerprint='casinoBanquetLead:'+phone+'|'+email+'|'+document.getElementById('date').value;
-  const previous=localStorage.getItem(fingerprint);
-  if(previous){
-    alert('We already received an enquiry with these details. If you need to update it, please contact the hotel directly.');
-    return;
+  const event = document.querySelector('input[name="event"]:checked')?.value || "";
+  const params = new URLSearchParams(window.location.search);
+
+  const payload = {
+    event: event,
+    otherEvent: document.getElementById("otherEventText")?.value.trim() || "",
+    guests: document.getElementById("guests").value,
+    date: document.getElementById("date").value,
+    time: document.getElementById("time").value,
+    venue: document.getElementById("venue").value,
+    notes: document.getElementById("notes").value.trim(),
+    name: document.getElementById("name").value.trim(),
+    phone: document.getElementById("phone").value.trim(),
+    email: document.getElementById("email").value.trim(),
+    source: params.get("utm_source") || "",
+    medium: params.get("utm_medium") || "",
+    campaign: params.get("utm_campaign") || ""
+  };
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  submitButton.textContent = "Submitting…";
+
+  try {
+    const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.message || "Submission failed");
+    }
+
+    alert("Thank you. Your enquiry has been submitted successfully.");
+    form.reset();
+
+    const otherWrap = document.getElementById("otherEventWrap");
+    if (otherWrap) otherWrap.style.display = "none";
+
+    showStep(1);
+
+  } catch (error) {
+    console.error("Lead submission error:", error);
+    alert("We couldn't submit your enquiry right now. Please try again.");
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = "Verify & submit enquiry";
   }
-
-  // Prevent ultra-fast automated submissions.
-  if(Date.now()-startedAt < 4000){
-    alert('Please take a moment to review your enquiry before submitting.');
-    return;
-  }
-
-  // Production integration point:
-  // POST the form payload to your CRM/lead endpoint only AFTER server-side OTP verification.
-  localStorage.setItem(fingerprint,new Date().toISOString());
-
-  document.getElementById('successName').textContent=document.getElementById('name').value.trim().split(' ')[0];
-  document.getElementById('ref').textContent='CH-'+Math.random().toString(36).slice(2,8).toUpperCase();
-  document.getElementById('formArea').style.display='none';
-  document.getElementById('success').style.display='block';
 });
 </script>
 </body>
